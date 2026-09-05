@@ -1,0 +1,9 @@
+{
+  "name": "achou-plus-backend",
+  "description": "Funções de backend do ACHOU+ (Mercado Pago + avaliações), hospedadas no Netlify",
+  "private": true,
+  "dependencies": {
+    "firebase-admin": "^12.1.0",
+    "mercadopago": "^2.0.15"
+  }
+}
