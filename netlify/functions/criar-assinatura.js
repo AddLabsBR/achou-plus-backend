@@ -62,6 +62,22 @@ exports.handler = async (event) => {
     const empresaDoc = snap.docs[0];
     const empresa = empresaDoc.data();
 
+    // O e-mail pode não estar salvo no documento da empresa (cadastros antigos) —
+    // nesse caso, buscamos direto do Firebase Auth como reserva.
+    let payerEmail = empresa.email;
+    if (!payerEmail) {
+        try {
+            const userRecord = await admin.auth().getUser(uid);
+            payerEmail = userRecord.email;
+        } catch (err) {
+            console.error('Não foi possível obter o e-mail do usuário:', err);
+        }
+    }
+
+    if (!payerEmail) {
+        return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Não foi possível identificar o e-mail da conta. Entre em contato com o suporte.' }) };
+    }
+
     const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
     const preapproval = new PreApproval(client);
 
@@ -71,7 +87,7 @@ exports.handler = async (event) => {
             body: {
                 reason: PLANO_DESTAQUE.reason,
                 external_reference: empresaDoc.id,
-                payer_email: empresa.email,
+                payer_email: payerEmail,
                 auto_recurring: {
                     frequency: PLANO_DESTAQUE.frequency,
                     frequency_type: PLANO_DESTAQUE.frequency_type,
