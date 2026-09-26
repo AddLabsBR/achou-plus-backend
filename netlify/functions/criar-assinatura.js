@@ -18,15 +18,15 @@ const db = admin.firestore();
 
 // ---- Ajuste aqui o plano pago do ACHOU+ ----
 const PLANO_DESTAQUE = {
-    reason: 'ACHOU+ Plano Destaque',
-    amount: 49.90,
+    reason: 'Zoons Plano Destaque',
+    amount: 29.90,
     frequency: 1,
     frequency_type: 'months',
     currency_id: 'BRL'
 };
 
 // TROQUE pela URL real do seu site publicado
-const BACK_URL = 'https://addlabsbr.github.io/achou-plus/';
+const BACK_URL = 'https://zoons.netlify.app/';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
