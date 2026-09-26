@@ -16,14 +16,36 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// ---- Ajuste aqui o plano pago do ACHOU+ ----
+// ---- Ajuste aqui o plano pago da Zoons ----
+// Os primeiros LIMITE_FUNDADORES negócios pagam PRECO_FUNDADOR para sempre.
+// A partir do negócio de número (LIMITE_FUNDADORES + 1), o preço vira PRECO_PADRAO, automaticamente.
+const LIMITE_FUNDADORES = 15;
+const PRECO_FUNDADOR = 29.90;
+const PRECO_PADRAO = 49.90;
+
 const PLANO_DESTAQUE = {
-    reason: 'Zoons Plano Destaque',
-    amount: 29.90,
     frequency: 1,
     frequency_type: 'months',
     currency_id: 'BRL'
 };
+
+// Contador global de vagas de fundador já ocupadas (documento único em Firestore)
+const CONTADOR_REF = db.collection('contadores').doc('fundadores');
+
+// Reserva uma vaga de fundador de forma segura, mesmo com vários cadastros ao mesmo tempo.
+// Retorna { fundador: true/false, preco: number }.
+async function reservarVagaOuPrecoPadrao() {
+    return db.runTransaction(async (tx) => {
+        const doc = await tx.get(CONTADOR_REF);
+        const total = doc.exists ? (doc.data().total || 0) : 0;
+
+        if (total < LIMITE_FUNDADORES) {
+            tx.set(CONTADOR_REF, { total: total + 1 }, { merge: true });
+            return { fundador: true, preco: PRECO_FUNDADOR };
+        }
+        return { fundador: false, preco: PRECO_PADRAO };
+    });
+}
 
 // TROQUE pela URL real do seu site publicado
 const BACK_URL = 'https://zoons.netlify.app/';
@@ -78,6 +100,12 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Não foi possível identificar o e-mail da conta. Entre em contato com o suporte.' }) };
     }
 
+    // Já tem vaga de fundador reservada de uma tentativa anterior? Não conta de novo.
+    const jaEraFundador = empresa.fundador === true;
+    const { fundador, preco } = jaEraFundador
+        ? { fundador: true, preco: PRECO_FUNDADOR }
+        : await reservarVagaOuPrecoPadrao();
+
     const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
     const preapproval = new PreApproval(client);
 
@@ -85,13 +113,13 @@ exports.handler = async (event) => {
     try {
         resultado = await preapproval.create({
             body: {
-                reason: PLANO_DESTAQUE.reason,
+                reason: fundador ? 'Zoons Plano Destaque · Fundador' : 'Zoons Plano Destaque',
                 external_reference: empresaDoc.id,
                 payer_email: payerEmail,
                 auto_recurring: {
                     frequency: PLANO_DESTAQUE.frequency,
                     frequency_type: PLANO_DESTAQUE.frequency_type,
-                    transaction_amount: PLANO_DESTAQUE.amount,
+                    transaction_amount: preco,
                     currency_id: PLANO_DESTAQUE.currency_id
                 },
                 back_url: BACK_URL,
@@ -100,13 +128,19 @@ exports.handler = async (event) => {
         });
     } catch (err) {
         console.error('Erro ao criar preapproval no Mercado Pago:', err);
+        // Se a criação falhou e a vaga era nova (não reaproveitada), devolve a vaga ao contador
+        if (fundador && !jaEraFundador) {
+            await CONTADOR_REF.set({ total: admin.firestore.FieldValue.increment(-1) }, { merge: true }).catch(() => {});
+        }
         return { statusCode: 500, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Não foi possível iniciar a assinatura. Tente novamente.' }) };
     }
 
     await empresaDoc.ref.update({
         assinatura_id: resultado.id,
         assinatura_status: 'pendente',
-        plano: 'destaque'
+        plano: 'destaque',
+        fundador: fundador,
+        preco_mensal: preco
     });
 
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify({ init_point: resultado.init_point }) };
