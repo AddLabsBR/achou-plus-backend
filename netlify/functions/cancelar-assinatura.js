@@ -14,6 +14,7 @@
 
 const admin = require('firebase-admin');
 const https = require('https');
+const { corsHeaders } = require('./_cors');
 
 if (!admin.apps.length) {
     admin.initializeApp({
@@ -23,12 +24,6 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
-
-const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
 
 function cancelarPreApproval(preapprovalId) {
     return new Promise((resolve, reject) => {
@@ -62,6 +57,7 @@ function cancelarPreApproval(preapprovalId) {
 }
 
 exports.handler = async (event) => {
+    const CORS_HEADERS = corsHeaders(event);
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers: CORS_HEADERS, body: '' };
     }

@@ -18,6 +18,7 @@
 
 const admin = require('firebase-admin');
 const https = require('https');
+const { corsHeaders } = require('./_cors');
 
 if (!admin.apps.length) {
     admin.initializeApp({
@@ -29,12 +30,6 @@ const db = admin.firestore();
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
-
-const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
 
 // Tira o public_id de uma URL do Cloudinary, ex.:
 // https://res.cloudinary.com/zzhznqvi/image/upload/v1234567890/zoons/anuncios/abc123.jpg
@@ -73,6 +68,7 @@ function deletarNoCloudinary(publicIds) {
 }
 
 exports.handler = async (event) => {
+    const CORS_HEADERS = corsHeaders(event);
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers: CORS_HEADERS, body: '' };
     }

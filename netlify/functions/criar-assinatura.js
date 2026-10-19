@@ -8,6 +8,7 @@
 
 const admin = require('firebase-admin');
 const { MercadoPagoConfig, PreApproval } = require('mercadopago');
+const { corsHeaders } = require('./_cors');
 
 if (!admin.apps.length) {
     admin.initializeApp({
@@ -56,13 +57,8 @@ async function reservarVagaOuPrecoPadrao(isImovel) {
 // TROQUE pela URL real do seu site publicado
 const BACK_URL = 'https://zoons.netlify.app/';
 
-const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
-
 exports.handler = async (event) => {
+    const CORS_HEADERS = corsHeaders(event);
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers: CORS_HEADERS, body: '' };
     }
