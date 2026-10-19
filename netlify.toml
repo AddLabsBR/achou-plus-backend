@@ -1,1 +1,12 @@
-
+# Cabeçalhos de segurança (item 19 do checklist: "Forzar HTTPS y revisar
+# los encabezados de seguridad"). O Netlify já força HTTPS automaticamente
+# em todos os domínios, então o que faltava eram estes cabeçalhos extras,
+# que não têm nenhum risco de quebrar as funções (são só respostas de API).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Permissions-Policy = "geolocation=(), camera=(), microphone=()"
