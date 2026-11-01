@@ -7,9 +7,10 @@
  *
  * Não precisa de variáveis de ambiente: lê o Firestore pela API REST pública
  * (as regras já permitem leitura pública de empresas aprovadas e dos anúncios).
+ * Nenhuma chave fica escrita no código.
  */
 const PROJECT_ID = 'achou-plus';
-const API_KEY = 'AIzaSyCL47mY9G1aHQRsHg76nwYzbvAgej3m6EI'; // chave web do Firebase (já é pública no site)
+const API_KEY = process.env.FIREBASE_WEB_API_KEY || ''; // opcional: o Firestore público também responde sem chave
 const SITE = 'https://zoons.com.br';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -24,7 +25,7 @@ const val = f => {
 };
 const plano = doc => { const o = {}; Object.entries(doc.fields || {}).forEach(([k, v]) => { o[k] = val(v); }); return o; };
 const get = async path => {
-    const r = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path}?key=${API_KEY}`);
+    const r = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path}${API_KEY ? '?key=' + encodeURIComponent(API_KEY) : ''}`);
     return r.ok ? plano(await r.json()) : null;
 };
 
