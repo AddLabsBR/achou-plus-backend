@@ -10,3 +10,10 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
     Permissions-Policy = "geolocation=(), camera=(), microphone=()"
+
+# Páginas de anúncio indexáveis pelo Google e com prévia no WhatsApp:
+# /a/{empresaId}/{anuncioId} é servida pela função "anuncio".
+[[redirects]]
+  from = "/a/:empresaId/:anuncioId"
+  to = "/.netlify/functions/anuncio"
+  status = 200
