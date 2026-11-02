@@ -12,9 +12,8 @@
  * Netlify (Site settings → Environment variables, no site
  * achou-plus-backend) como:
  *   MP_WEBHOOK_SECRET
- * Enquanto essa variável não existir, a função continua funcionando
- * normalmente (só avisa no log que a validação está desligada) — assim
- * o deploy desse arquivo não quebra nada antes de você configurar a chave.
+ * ATENÇÃO: sem essa variável, TODAS as notificações são rejeitadas (401).
+ * Configure-a antes de ativar a cobrança.
  */
 
 const admin = require('firebase-admin');
@@ -40,8 +39,10 @@ function cabecalho(headers, nome){
 function assinaturaValida(event, dataId){
     const secret = process.env.MP_WEBHOOK_SECRET;
     if (!secret) {
-        console.warn('MP_WEBHOOK_SECRET não configurado — validação de assinatura do webhook está DESLIGADA. Configure essa variável no Netlify para ativar.');
-        return true;
+        // Falha fechada: sem a chave secreta, nenhuma notificação é aceita.
+        // (Configure MP_WEBHOOK_SECRET no Netlify ANTES de ativar a cobrança.)
+        console.error('MP_WEBHOOK_SECRET não configurado — notificação rejeitada. Configure essa variável no Netlify.');
+        return false;
     }
 
     const xSignature = cabecalho(event.headers, 'x-signature');
@@ -112,7 +113,15 @@ exports.handler = async (event) => {
         const info = await preapproval.get({ id });
 
         const empresaId = info.external_reference;
-        if (!empresaId) {
+        // ID precisa ter formato seguro (evita caminhos estranhos no Firestore)
+        if (typeof empresaId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(empresaId)) {
+            return { statusCode: 200, body: 'ok' };
+        }
+        const empresaRef = db.collection('empresas').doc(empresaId);
+        const empresaSnap = await empresaRef.get();
+        if (!empresaSnap.exists) {
+            // Empresa não existe (apagada?): responde 200 pra o Mercado Pago não reenviar pra sempre
+            console.warn('Webhook para empresa inexistente:', empresaId);
             return { statusCode: 200, body: 'ok' };
         }
 
@@ -124,7 +133,7 @@ exports.handler = async (event) => {
         };
         const novoStatus = statusMap[info.status] || 'pendente';
 
-        await db.collection('empresas').doc(empresaId).update({
+        await empresaRef.update({
             assinatura_status: novoStatus,
             destaque: novoStatus === 'ativa'
         });
