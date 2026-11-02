@@ -18,7 +18,6 @@
 
 const admin = require('firebase-admin');
 const https = require('https');
-const { corsHeaders } = require('./_cors');
 
 if (!admin.apps.length) {
     admin.initializeApp({
@@ -31,11 +30,19 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
 // Tira o public_id de uma URL do Cloudinary, ex.:
 // https://res.cloudinary.com/zzhznqvi/image/upload/v1234567890/zoons/anuncios/abc123.jpg
 // -> zoons/anuncios/abc123
 function extrairPublicId(url) {
     if (typeof url !== 'string') return null;
+    // Só aceita URLs da NOSSA conta do Cloudinary (evita apagar fotos de terceiros)
+    if (!CLOUDINARY_CLOUD_NAME || !url.startsWith(`https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/`)) return null;
     const m = url.match(/\/upload\/(?:v\d+\/)?(.+?)\.[a-zA-Z0-9]+(?:\?.*)?$/);
     return m ? m[1] : null;
 }
@@ -68,7 +75,6 @@ function deletarNoCloudinary(publicIds) {
 }
 
 exports.handler = async (event) => {
-    const CORS_HEADERS = corsHeaders(event);
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers: CORS_HEADERS, body: '' };
     }
@@ -96,7 +102,7 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Corpo inválido.' }) };
     }
     const { empresaId, anuncioId } = payload;
-    if (!empresaId || !anuncioId) {
+    if (typeof empresaId !== 'string' || typeof anuncioId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(empresaId) || !/^[A-Za-z0-9_-]{1,64}$/.test(anuncioId)) {
         return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Faltam empresaId/anuncioId.' }) };
     }
 
@@ -115,7 +121,23 @@ exports.handler = async (event) => {
     }
 
     const fotos = Array.isArray(anuncioSnap.data().fotos) ? anuncioSnap.data().fotos : [];
-    const publicIds = fotos.map(extrairPublicId).filter(Boolean);
+    let urlsValidas = fotos.filter(u => extrairPublicId(u));
+
+    // Não apaga foto que ainda é usada por OUTRO anúncio (alguém pode ter copiado a URL).
+    // Se a checagem falhar, por segurança não apaga nada.
+    try {
+        const seguras = [];
+        for (const u of urlsValidas) {
+            const outros = await db.collectionGroup('anuncios').where('fotos', 'array-contains', u).limit(3).get();
+            const usadaPorOutro = outros.docs.some(d => d.ref.path !== anuncioRef.path);
+            if (!usadaPorOutro) seguras.push(u);
+        }
+        urlsValidas = seguras;
+    } catch (err) {
+        console.error('Checagem de fotos compartilhadas falhou; nada será apagado:', err);
+        urlsValidas = [];
+    }
+    const publicIds = urlsValidas.map(extrairPublicId).filter(Boolean);
 
     if (!publicIds.length) {
         return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify({ ok: true, apagadas: 0 }) };
